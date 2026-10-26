@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Brighton Girls — BHS Blueprint and CFC Red tactical learning." />
+  <meta name="description" content="Brighton Girls — BHS Blueprint, CFC Red, and CFC Red Futsal tactical learning." />
   <meta name="theme-color" content="#f4f7fb" />
   <title>Brighton Girls — The Blueprint</title>
   <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20260831a" />
+  <link rel="stylesheet" href="styles.css?v=20261025d" />
 </head>
 <body>
   <a class="sr-only" href="#main">Skip to content</a>
@@ -22,78 +22,114 @@
     </a>
 
     <div class="area-switch" role="tablist" aria-label="App area">
-      <a class="area-switch-btn" href="#blueprint" data-area="blueprint" data-nav="blueprint-area">BHS Blueprint</a>
-      <a class="area-switch-btn" href="#cfc-red" data-area="cfc-red" data-nav="cfc-red-area">CFC Red</a>
+      <a class="area-switch-btn" href="#blueprint" data-area="blueprint" data-pack="blueprint" data-nav="blueprint-area">BHS Blueprint</a>
+      <a class="area-switch-btn" href="#cfc-red" data-area="cfc-red" data-pack="cfcRed" data-nav="cfc-red-area">CFC Red</a>
+      <a class="area-switch-btn" href="#cfc-futsal" data-area="cfc-futsal" data-pack="cfcFutsal" data-nav="cfc-futsal-area">Futsal</a>
+      <label class="area-switch-select-wrap">
+        <span class="sr-only">App area</span>
+        <select id="area-switch-select" class="area-switch-select"></select>
+      </label>
     </div>
 
     <nav class="nav-desktop nav-blueprint" aria-label="BHS Blueprint">
       <a class="nav-link" href="#blueprint" data-nav="blueprint">Modules</a>
-      <a class="nav-link" href="#basics" data-nav="basics">Basic 4-3-3</a>
+      <a class="nav-link" href="#basics" data-nav="basics" data-module="basics">Basic 4-3-3</a>
 
-      <div class="nav-flyout" data-flyout>
+      <div class="nav-flyout" data-flyout data-group-pack="blueprint" data-group-modules="attack,wide,support">
         <button type="button" class="nav-link nav-flyout-trigger" data-nav-group="attack-group" aria-expanded="false" aria-haspopup="true">
           Attack
         </button>
         <div class="nav-flyout-panel" role="menu">
-          <a href="#attack" data-nav="attack" role="menuitem">Attacking Shape</a>
-          <a href="#wide" data-nav="wide" role="menuitem">Wide Attack Patterns</a>
-          <a href="#support" data-nav="support" role="menuitem">Supporting Runs</a>
+          <a href="#attack" data-nav="attack" data-module="attack" role="menuitem">Attacking Shape</a>
+          <a href="#wide" data-nav="wide" data-module="wide" role="menuitem">Wide Attack Patterns</a>
+          <a href="#support" data-nav="support" data-module="support" role="menuitem">Supporting Runs</a>
         </div>
       </div>
 
-      <div class="nav-flyout" data-flyout>
-        <a class="nav-link nav-flyout-trigger" href="#defense" data-nav="defense" data-nav-group="defense-group">Defense</a>
+      <div class="nav-flyout" data-flyout data-group-pack="blueprint" data-group-modules="defense">
+        <a class="nav-link nav-flyout-trigger" href="#defense" data-nav="defense" data-module="defense" data-nav-group="defense-group">Defense</a>
         <div class="nav-flyout-panel" role="menu">
-          <a href="#defense" data-nav="defense" role="menuitem">Defensive Shape</a>
+          <a href="#defense" data-nav="defense" data-module="defense" role="menuitem">Defensive Shape</a>
         </div>
       </div>
 
-      <div class="nav-flyout" data-flyout>
+      <div class="nav-flyout" data-flyout data-group-pack="blueprint" data-group-modules="corner">
         <button type="button" class="nav-link nav-flyout-trigger" data-nav-group="set-pieces-group" aria-expanded="false" aria-haspopup="true">
           Set Pieces
         </button>
         <div class="nav-flyout-panel" role="menu">
-          <a href="#corner" data-nav="corner" role="menuitem">Corners</a>
+          <a href="#corner" data-nav="corner" data-module="corner" role="menuitem">Corners</a>
         </div>
       </div>
 
-      <a class="nav-link" href="#challenge" data-nav="challenge">Challenge</a>
-      <a class="nav-link" href="#glossary" data-nav="glossary">Glossary</a>
+      <a class="nav-link" href="#challenge" data-nav="challenge" data-module="challenge">Challenge</a>
+      <a class="nav-link" href="#glossary" data-nav="glossary" data-module="glossary">Glossary</a>
     </nav>
 
     <nav class="nav-desktop nav-cfc-red" aria-label="CFC Red" hidden>
       <a class="nav-link" href="#cfc-red" data-nav="cfc-red">Modules</a>
-      <a class="nav-link" href="#cfc-basics" data-nav="cfc-basics">Basic 4-1-2-1</a>
+      <a class="nav-link" href="#cfc-basics" data-nav="cfc-basics" data-module="cfc-basics">Basic 4-1-2-1</a>
 
-      <div class="nav-flyout" data-flyout>
+      <div class="nav-flyout" data-flyout data-group-pack="cfcRed" data-group-modules="cfc-attack,cfc-wide,cfc-support">
         <button type="button" class="nav-link nav-flyout-trigger" data-nav-group="cfc-attack-group" aria-expanded="false" aria-haspopup="true">
           Attack
         </button>
         <div class="nav-flyout-panel" role="menu">
-          <a href="#cfc-attack" data-nav="cfc-attack" role="menuitem">Attacking Shape</a>
-          <a href="#cfc-wide" data-nav="cfc-wide" role="menuitem">Wide Attack Patterns</a>
-          <a href="#cfc-support" data-nav="cfc-support" role="menuitem">Supporting Runs</a>
+          <a href="#cfc-attack" data-nav="cfc-attack" data-module="cfc-attack" role="menuitem">Attacking Shape</a>
+          <a href="#cfc-wide" data-nav="cfc-wide" data-module="cfc-wide" role="menuitem">Wide Attack Patterns</a>
+          <a href="#cfc-support" data-nav="cfc-support" data-module="cfc-support" role="menuitem">Supporting Runs</a>
         </div>
       </div>
 
-      <div class="nav-flyout" data-flyout>
-        <a class="nav-link nav-flyout-trigger" href="#cfc-defense" data-nav="cfc-defense" data-nav-group="cfc-defense-group">Defense</a>
+      <div class="nav-flyout" data-flyout data-group-pack="cfcRed" data-group-modules="cfc-defense">
+        <a class="nav-link nav-flyout-trigger" href="#cfc-defense" data-nav="cfc-defense" data-module="cfc-defense" data-nav-group="cfc-defense-group">Defense</a>
         <div class="nav-flyout-panel" role="menu">
-          <a href="#cfc-defense" data-nav="cfc-defense" role="menuitem">Defensive Shape</a>
+          <a href="#cfc-defense" data-nav="cfc-defense" data-module="cfc-defense" role="menuitem">Defensive Shape</a>
         </div>
       </div>
 
-      <div class="nav-flyout" data-flyout>
+      <div class="nav-flyout" data-flyout data-group-pack="cfcRed" data-group-modules="cfc-corner">
         <button type="button" class="nav-link nav-flyout-trigger" data-nav-group="cfc-set-pieces-group" aria-expanded="false" aria-haspopup="true">
           Set Pieces
         </button>
         <div class="nav-flyout-panel" role="menu">
-          <a href="#cfc-corner" data-nav="cfc-corner" role="menuitem">Corners</a>
+          <a href="#cfc-corner" data-nav="cfc-corner" data-module="cfc-corner" role="menuitem">Corners</a>
         </div>
       </div>
 
-      <a class="nav-link" href="#cfc-challenge" data-nav="cfc-challenge">Challenge</a>
-      <a class="nav-link" href="#cfc-glossary" data-nav="cfc-glossary">Glossary</a>
+      <a class="nav-link" href="#cfc-challenge" data-nav="cfc-challenge" data-module="cfc-challenge">Challenge</a>
+      <a class="nav-link" href="#cfc-glossary" data-nav="cfc-glossary" data-module="cfc-glossary">Glossary</a>
+    </nav>
+
+    <nav class="nav-desktop nav-futsal" aria-label="CFC Red Futsal" hidden>
+      <a class="nav-link" href="#cfc-futsal" data-nav="cfc-futsal">Modules</a>
+      <a class="nav-link" href="#futsal-four-jobs" data-nav="futsal-jobs" data-module="futsal-jobs">Four Jobs</a>
+      <a class="nav-link" href="#futsal-keeper" data-nav="futsal-keeper" data-module="futsal-keeper">Keeper</a>
+
+      <div class="nav-flyout" data-flyout data-group-pack="cfcFutsal" data-group-modules="futsal-zone14,futsal-rotation,futsal-finish">
+        <button type="button" class="nav-link nav-flyout-trigger" data-nav-group="futsal-attack-group" aria-expanded="false" aria-haspopup="true">
+          Attack
+        </button>
+        <div class="nav-flyout-panel" role="menu">
+          <a href="#futsal-zone14" data-nav="futsal-zone14" data-module="futsal-zone14" role="menuitem">Show, Create, or Clear</a>
+          <a href="#futsal-rotation" data-nav="futsal-rotation" data-module="futsal-rotation" role="menuitem">The Rotation</a>
+          <a href="#futsal-finish" data-nav="futsal-finish" data-module="futsal-finish" role="menuitem">Finish the Advantage</a>
+        </div>
+      </div>
+
+      <div class="nav-flyout" data-flyout data-group-pack="cfcFutsal" data-group-modules="futsal-diamond,futsal-motion,futsal-transitions">
+        <button type="button" class="nav-link nav-flyout-trigger" data-nav-group="futsal-defend-group" aria-expanded="false" aria-haspopup="true">
+          Defend
+        </button>
+        <div class="nav-flyout-panel" role="menu">
+          <a href="#futsal-diamond" data-nav="futsal-diamond" data-module="futsal-diamond" role="menuitem">Defend the Diamond</a>
+          <a href="#futsal-motion" data-nav="futsal-motion" data-module="futsal-motion" role="menuitem">Diamond in Motion</a>
+          <a href="#futsal-transitions" data-nav="futsal-transitions" data-module="futsal-transitions" role="menuitem">Transitions</a>
+        </div>
+      </div>
+
+      <a class="nav-link" href="#futsal-challenge" data-nav="futsal-challenge" data-module="futsal-challenge">Challenge</a>
+      <a class="nav-link" href="#futsal-glossary" data-nav="futsal-glossary" data-module="futsal-glossary">Glossary</a>
     </nav>
 
     <div class="header-actions">
@@ -116,34 +152,50 @@
     <nav class="nav-drawer-panel" aria-label="Mobile">
       <a href="#home" data-nav="hub" data-close-drawer>Home</a>
 
-      <p class="nav-drawer-heading">Areas</p>
-      <a href="#blueprint" data-area="blueprint" data-nav="blueprint-area" data-close-drawer>BHS Blueprint</a>
-      <a href="#cfc-red" data-area="cfc-red" data-nav="cfc-red-area" data-close-drawer>CFC Red</a>
+      <p class="nav-drawer-heading" data-areas-heading>Areas</p>
+      <a href="#blueprint" data-area="blueprint" data-pack="blueprint" data-nav="blueprint-area" data-close-drawer>BHS Blueprint</a>
+      <a href="#cfc-red" data-area="cfc-red" data-pack="cfcRed" data-nav="cfc-red-area" data-close-drawer>CFC Red</a>
+      <a href="#cfc-futsal" data-area="cfc-futsal" data-pack="cfcFutsal" data-nav="cfc-futsal-area" data-close-drawer>CFC Red Futsal</a>
 
-      <div class="drawer-blueprint">
+      <div class="drawer-blueprint" data-pack-section="blueprint">
         <p class="nav-drawer-heading">BHS Blueprint</p>
         <a href="#blueprint" data-nav="blueprint" data-close-drawer>Modules</a>
-        <a href="#basics" data-nav="basics" data-close-drawer>Basic 4-3-3</a>
-        <a href="#attack" data-nav="attack" data-close-drawer>Attacking Shape</a>
-        <a href="#wide" data-nav="wide" data-close-drawer>Wide Attack Patterns</a>
-        <a href="#support" data-nav="support" data-close-drawer>Supporting Runs</a>
-        <a href="#defense" data-nav="defense" data-close-drawer>Defensive Shape</a>
-        <a href="#corner" data-nav="corner" data-close-drawer>Corners</a>
-        <a href="#challenge" data-nav="challenge" data-close-drawer>Challenge</a>
-        <a href="#glossary" data-nav="glossary" data-close-drawer>Glossary</a>
+        <a href="#basics" data-nav="basics" data-module="basics" data-close-drawer>Basic 4-3-3</a>
+        <a href="#attack" data-nav="attack" data-module="attack" data-close-drawer>Attacking Shape</a>
+        <a href="#wide" data-nav="wide" data-module="wide" data-close-drawer>Wide Attack Patterns</a>
+        <a href="#support" data-nav="support" data-module="support" data-close-drawer>Supporting Runs</a>
+        <a href="#defense" data-nav="defense" data-module="defense" data-close-drawer>Defensive Shape</a>
+        <a href="#corner" data-nav="corner" data-module="corner" data-close-drawer>Corners</a>
+        <a href="#challenge" data-nav="challenge" data-module="challenge" data-close-drawer>Challenge</a>
+        <a href="#glossary" data-nav="glossary" data-module="glossary" data-close-drawer>Glossary</a>
       </div>
 
-      <div class="drawer-cfc-red">
+      <div class="drawer-cfc-red" data-pack-section="cfcRed">
         <p class="nav-drawer-heading">CFC Red</p>
         <a href="#cfc-red" data-nav="cfc-red" data-close-drawer>Modules</a>
-        <a href="#cfc-basics" data-nav="cfc-basics" data-close-drawer>Basic 4-1-2-1</a>
-        <a href="#cfc-attack" data-nav="cfc-attack" data-close-drawer>Attacking Shape</a>
-        <a href="#cfc-wide" data-nav="cfc-wide" data-close-drawer>Wide Attack Patterns</a>
-        <a href="#cfc-support" data-nav="cfc-support" data-close-drawer>Supporting Runs</a>
-        <a href="#cfc-defense" data-nav="cfc-defense" data-close-drawer>Defensive Shape</a>
-        <a href="#cfc-corner" data-nav="cfc-corner" data-close-drawer>Corners</a>
-        <a href="#cfc-challenge" data-nav="cfc-challenge" data-close-drawer>Challenge</a>
-        <a href="#cfc-glossary" data-nav="cfc-glossary" data-close-drawer>Glossary</a>
+        <a href="#cfc-basics" data-nav="cfc-basics" data-module="cfc-basics" data-close-drawer>Basic 4-1-2-1</a>
+        <a href="#cfc-attack" data-nav="cfc-attack" data-module="cfc-attack" data-close-drawer>Attacking Shape</a>
+        <a href="#cfc-wide" data-nav="cfc-wide" data-module="cfc-wide" data-close-drawer>Wide Attack Patterns</a>
+        <a href="#cfc-support" data-nav="cfc-support" data-module="cfc-support" data-close-drawer>Supporting Runs</a>
+        <a href="#cfc-defense" data-nav="cfc-defense" data-module="cfc-defense" data-close-drawer>Defensive Shape</a>
+        <a href="#cfc-corner" data-nav="cfc-corner" data-module="cfc-corner" data-close-drawer>Corners</a>
+        <a href="#cfc-challenge" data-nav="cfc-challenge" data-module="cfc-challenge" data-close-drawer>Challenge</a>
+        <a href="#cfc-glossary" data-nav="cfc-glossary" data-module="cfc-glossary" data-close-drawer>Glossary</a>
+      </div>
+
+      <div class="drawer-futsal" data-pack-section="cfcFutsal">
+        <p class="nav-drawer-heading">CFC Red Futsal</p>
+        <a href="#cfc-futsal" data-nav="cfc-futsal" data-close-drawer>Modules</a>
+        <a href="#futsal-four-jobs" data-nav="futsal-jobs" data-module="futsal-jobs" data-close-drawer>The Four Jobs</a>
+        <a href="#futsal-zone14" data-nav="futsal-zone14" data-module="futsal-zone14" data-close-drawer>Show, Create, or Clear</a>
+        <a href="#futsal-rotation" data-nav="futsal-rotation" data-module="futsal-rotation" data-close-drawer>The Rotation</a>
+        <a href="#futsal-keeper" data-nav="futsal-keeper" data-module="futsal-keeper" data-close-drawer>Keeper as Fifth</a>
+        <a href="#futsal-finish" data-nav="futsal-finish" data-module="futsal-finish" data-close-drawer>Finish the Advantage</a>
+        <a href="#futsal-diamond" data-nav="futsal-diamond" data-module="futsal-diamond" data-close-drawer>Defend the Diamond</a>
+        <a href="#futsal-motion" data-nav="futsal-motion" data-module="futsal-motion" data-close-drawer>Diamond in Motion</a>
+        <a href="#futsal-transitions" data-nav="futsal-transitions" data-module="futsal-transitions" data-close-drawer>Transitions</a>
+        <a href="#futsal-challenge" data-nav="futsal-challenge" data-module="futsal-challenge" data-close-drawer>Challenge</a>
+        <a href="#futsal-glossary" data-nav="futsal-glossary" data-module="futsal-glossary" data-close-drawer>Glossary</a>
       </div>
     </nav>
   </div>
@@ -160,6 +212,7 @@
       <h2 id="settings-title">Settings</h2>
       <p class="muted">Progress is saved on this device only. No account required.</p>
       <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="open-admin-btn">Manage modules</button>
         <button type="button" class="btn btn-danger" id="reset-progress-btn">Reset all progress</button>
         <button type="button" class="btn btn-secondary" data-close-settings>Close</button>
       </div>
@@ -169,8 +222,9 @@
     </div>
   </div>
 
-  <script src="scenarios.js?v=20260831a"></script>
-  <script src="cfc-red-scenarios.js?v=20260831a"></script>
-  <script src="app.js?v=20260831a"></script>
+  <script src="scenarios.js?v=20261025a"></script>
+  <script src="cfc-red-scenarios.js?v=20261025a"></script>
+  <script src="cfc-futsal-scenarios.js?v=20261025c"></script>
+  <script src="app.js?v=20261025d"></script>
 </body>
 </html>

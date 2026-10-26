@@ -5,6 +5,7 @@
   const PACKS = {
     blueprint: window.SoccerIQ,
     cfcRed: window.CfcRedIQ,
+    cfcFutsal: window.CfcFutsalIQ,
   };
 
   if (!PACKS.blueprint || !PACKS.blueprint.SCENARIOS) {
@@ -15,6 +16,9 @@
   if (!PACKS.cfcRed || !PACKS.cfcRed.SCENARIOS) {
     console.warn("CFC Red pack missing — cfc-red-scenarios.js did not load.");
   }
+  if (!PACKS.cfcFutsal || !PACKS.cfcFutsal.SCENARIOS) {
+    console.warn("CFC Red Futsal pack missing — cfc-futsal-scenarios.js did not load.");
+  }
 
   let packId = "blueprint";
   let CONFIG;
@@ -24,6 +28,8 @@
   let NAV_GROUPS;
   let PW;
   let PL;
+  let drawScale = 1;
+  let animGeneration = 0;
 
   function bindPack(id) {
     const pack = PACKS[id];
@@ -196,32 +202,402 @@
     showToast._t = setTimeout(() => el.classList.remove("is-visible"), 1800);
   }
 
+  /* ---------- Module visibility ---------- */
+  const VISIBILITY_KEY = "blueprint-module-visibility";
+  const ADMIN_UNLOCK_KEY = "blueprint-admin-unlock";
+  const ADMIN_PASSKEY = "keppa";
+  const PACK_META = {
+    blueprint: {
+      label: "BHS Blueprint",
+      shortLabel: "BHS",
+      hash: "blueprint",
+      defaultOn: false,
+      glossary: "glossary",
+      challenge: "challenge",
+    },
+    cfcRed: {
+      label: "CFC Red",
+      shortLabel: "CFC Red",
+      hash: "cfc-red",
+      defaultOn: true,
+      glossary: "cfc-glossary",
+      challenge: "cfc-challenge",
+    },
+    cfcFutsal: {
+      label: "CFC Red Futsal",
+      shortLabel: "Futsal",
+      hash: "cfc-futsal",
+      defaultOn: true,
+      glossary: "futsal-glossary",
+      challenge: "futsal-challenge",
+    },
+  };
+
+  let visibility = loadVisibility();
+
+  function loadVisibility() {
+    try {
+      const raw = localStorage.getItem(VISIBILITY_KEY);
+      if (!raw) return { packs: {}, modules: {} };
+      const parsed = JSON.parse(raw);
+      return {
+        packs: parsed && typeof parsed.packs === "object" && parsed.packs ? parsed.packs : {},
+        modules: parsed && typeof parsed.modules === "object" && parsed.modules ? parsed.modules : {},
+      };
+    } catch {
+      return { packs: {}, modules: {} };
+    }
+  }
+
+  function saveVisibility() {
+    localStorage.setItem(VISIBILITY_KEY, JSON.stringify(visibility));
+  }
+
+  function isPackEnabled(packKey) {
+    if (typeof visibility.packs[packKey] === "boolean") return visibility.packs[packKey];
+    return PACK_META[packKey] ? PACK_META[packKey].defaultOn : true;
+  }
+
+  function moduleFlag(moduleId) {
+    if (typeof visibility.modules[moduleId] === "boolean") return visibility.modules[moduleId];
+    return true;
+  }
+
+  function packKeyForModule(moduleId) {
+    if (!moduleId) return null;
+    const keys = Object.keys(PACK_META);
+    for (let i = 0; i < keys.length; i += 1) {
+      const id = keys[i];
+      const meta = PACK_META[id];
+      if (moduleId === meta.glossary || moduleId === meta.challenge) return id;
+      const pack = PACKS[id];
+      if (pack && (pack.MODULES || []).some((m) => m.id === moduleId)) return id;
+    }
+    if (String(moduleId).indexOf("futsal-") === 0) return "cfcFutsal";
+    if (String(moduleId).indexOf("cfc-") === 0) return "cfcRed";
+    return null;
+  }
+
+  function isModuleEnabled(moduleId, packKey) {
+    const pid = packKey || packKeyForModule(moduleId);
+    if (pid && !isPackEnabled(pid)) return false;
+    return moduleFlag(moduleId);
+  }
+
+  function enabledPackList() {
+    return Object.keys(PACK_META).filter((id) => isPackEnabled(id) && PACKS[id]);
+  }
+
+  function fallbackHash() {
+    if (packId && isPackEnabled(packId)) return PACK_META[packId].hash;
+    const enabled = enabledPackList();
+    if (enabled.length === 1) return PACK_META[enabled[0]].hash;
+    return "home";
+  }
+
+  function routeAllowed(route) {
+    if (!route || route.view === "admin" || route.view === "home") return true;
+    const byHash = Object.keys(PACK_META).find((id) => PACK_META[id].hash === route.view);
+    const pid = byHash || packId;
+    if (!pid || !isPackEnabled(pid)) return false;
+    if (byHash) return true;
+    if (route.view === "glossary") return isModuleEnabled(PACK_META[pid].glossary, pid);
+    if (route.view === "challenge") return isModuleEnabled(PACK_META[pid].challenge, pid);
+    if (route.view === "module" || route.view === "scenario") {
+      return !!(route.moduleId && isModuleEnabled(route.moduleId, pid));
+    }
+    return true;
+  }
+
+  function applyVisibility() {
+    const enabled = enabledPackList();
+    $$("[data-pack]").forEach((el) => {
+      el.hidden = !isPackEnabled(el.getAttribute("data-pack"));
+    });
+    $$("[data-pack-section]").forEach((el) => {
+      el.hidden = !isPackEnabled(el.getAttribute("data-pack-section"));
+    });
+    $$("[data-module]").forEach((el) => {
+      const id = el.getAttribute("data-module");
+      el.hidden = !isModuleEnabled(id, packKeyForModule(id));
+    });
+    $$("[data-group-modules]").forEach((el) => {
+      const pack = el.getAttribute("data-group-pack");
+      const ids = (el.getAttribute("data-group-modules") || "").split(",").filter(Boolean);
+      el.hidden = !ids.some((id) => isModuleEnabled(id, pack));
+    });
+    const areaSwitch = $(".area-switch");
+    if (areaSwitch) areaSwitch.hidden = enabled.length < 2;
+    document.body.classList.toggle("areas-many", enabled.length >= 3);
+    const areasHeading = $("[data-areas-heading]");
+    if (areasHeading) areasHeading.hidden = enabled.length < 2;
+    syncAreaSelect();
+  }
+
+  function syncAreaSelect() {
+    const sel = $("#area-switch-select");
+    if (!sel) return;
+    const enabled = enabledPackList();
+    const onHome = state.view === "home" || state.view === "admin";
+    const current = !onHome && PACK_META[packId] ? PACK_META[packId].hash : "home";
+    const options = [{ hash: "home", label: "Areas" }].concat(
+      enabled.map((id) => ({
+        hash: PACK_META[id].hash,
+        label: PACK_META[id].shortLabel || PACK_META[id].label,
+      }))
+    );
+    sel.innerHTML = options
+      .map((opt) => {
+        const selected = opt.hash === current ? " selected" : "";
+        return `<option value="${escapeHtml(opt.hash)}"${selected}>${escapeHtml(opt.label)}</option>`;
+      })
+      .join("");
+  }
+
+  function adminUnlocked() {
+    try {
+      return sessionStorage.getItem(ADMIN_UNLOCK_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }
+
+  function adminEntries(packKey) {
+    const pack = PACKS[packKey];
+    if (!pack) return [];
+    const modules = pack.MODULES || [];
+    const groups = pack.NAV_GROUPS || [];
+    const emitted = new Set();
+    const entries = [];
+    modules.forEach((mod) => {
+      const group = groups.find((g) => (g.modules || []).indexOf(mod.id) !== -1);
+      if (group) {
+        if (!emitted.has(group.id)) {
+          emitted.add(group.id);
+          entries.push({
+            type: "group",
+            id: group.id,
+            label: group.label,
+            modules: group.modules.map((id) => modules.find((m) => m.id === id)).filter(Boolean),
+          });
+        }
+      } else {
+        entries.push({ type: "module", module: mod });
+      }
+    });
+    entries.push({
+      type: "module",
+      module: {
+        id: PACK_META[packKey].glossary,
+        title: "Glossary",
+        subtitle: "Shared language",
+      },
+    });
+    return entries;
+  }
+
+  function adminModuleRow(mod, depth) {
+    const on = moduleFlag(mod.id);
+    const cls = depth >= 2 ? "admin-row is-deep" : "admin-row is-nested";
+    const detail = mod.subtitle || (mod.isChallenge ? "Mixed questions" : "");
+    return `
+      <label class="${cls}">
+        <span class="admin-row-copy">
+          <strong>${escapeHtml(mod.title)}</strong>
+          ${detail ? `<span>${escapeHtml(detail)}</span>` : ""}
+        </span>
+        <span class="switch">
+          <input type="checkbox" data-admin-module="${escapeHtml(mod.id)}" ${on ? "checked" : ""} aria-label="${escapeHtml(mod.title)}" />
+          <span class="switch-ui" aria-hidden="true"></span>
+        </span>
+      </label>`;
+  }
+
+  function renderAdmin() {
+    if (!adminUnlocked()) {
+      root.innerHTML = `
+        <section class="hero">
+          <h1>Modules</h1>
+          <p>Enter the passkey to show and hide areas and modules on this device.</p>
+        </section>
+        <form id="admin-gate" class="results-card">
+          <label for="admin-passkey">Passkey</label>
+          <div class="text-gate">
+            <input id="admin-passkey" class="text-gate-input" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <button class="btn btn-primary" type="submit">Unlock</button>
+          </div>
+          <p id="admin-gate-error" class="muted" hidden>That passkey doesn’t match.</p>
+        </form>`;
+      const form = $("#admin-gate");
+      const input = $("#admin-passkey");
+      input?.focus();
+      form?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (String(input.value || "").trim().toLowerCase() !== ADMIN_PASSKEY) {
+          const err = $("#admin-gate-error");
+          if (err) err.hidden = false;
+          input?.focus();
+          return;
+        }
+        try {
+          sessionStorage.setItem(ADMIN_UNLOCK_KEY, "1");
+        } catch {
+          /* ignore */
+        }
+        render();
+      });
+      return;
+    }
+
+    const packsHtml = Object.keys(PACK_META)
+      .filter((packKey) => PACKS[packKey])
+      .map((packKey) => {
+        const meta = PACK_META[packKey];
+        const packOn = isPackEnabled(packKey);
+        const rows = adminEntries(packKey)
+          .map((entry) => {
+            if (entry.type === "group") {
+              const ids = entry.modules.map((m) => m.id).join(",");
+              return `
+                <label class="admin-row is-nested">
+                  <span class="admin-row-copy">
+                    <strong>${escapeHtml(entry.label)}</strong>
+                    <span>Turns every module in this group on or off</span>
+                  </span>
+                  <span class="switch">
+                    <input type="checkbox" data-admin-group="${escapeHtml(entry.id)}" data-admin-modules="${escapeHtml(ids)}" aria-label="${escapeHtml(entry.label)}" />
+                    <span class="switch-ui" aria-hidden="true"></span>
+                  </span>
+                </label>
+                ${entry.modules.map((m) => adminModuleRow(m, 2)).join("")}`;
+            }
+            return adminModuleRow(entry.module, 1);
+          })
+          .join("");
+        return `
+          <section class="admin-pack ${packOn ? "" : "is-off"}">
+            <label class="admin-row admin-pack-head">
+              <span class="admin-row-copy">
+                <strong>${escapeHtml(meta.label)}</strong>
+                <span>Whole area</span>
+              </span>
+              <span class="switch">
+                <input type="checkbox" data-admin-pack="${escapeHtml(packKey)}" ${packOn ? "checked" : ""} aria-label="${escapeHtml(meta.label)}" />
+                <span class="switch-ui" aria-hidden="true"></span>
+              </span>
+            </label>
+            ${packOn ? "" : `<p class="admin-pack-note">Hidden while this area is off. Switches underneath still save.</p>`}
+            ${rows}
+          </section>`;
+      })
+      .join("");
+
+    root.innerHTML = `
+      <div class="section-header">
+        <div>
+          <h1>Modules</h1>
+          <p>Turn an area off to hide it. Turn a module off to hide that lesson. Saved on this device — other phones keep the starting setup until changed there.</p>
+        </div>
+        <div class="module-card-actions">
+          <button type="button" class="btn btn-ghost" id="admin-lock">Lock</button>
+          <a class="btn btn-secondary" href="#home">Done</a>
+        </div>
+      </div>
+      <div class="admin-stack">${packsHtml}</div>
+      <div class="module-card-actions" style="margin-top:1rem">
+        <button type="button" class="btn btn-ghost" id="admin-reset-visibility">Reset to starting setup</button>
+      </div>`;
+
+    $$("[data-admin-group]").forEach((input) => {
+      const ids = (input.getAttribute("data-admin-modules") || "").split(",").filter(Boolean);
+      const flags = ids.map((id) => moduleFlag(id));
+      const allOn = flags.length > 0 && flags.every(Boolean);
+      const allOff = flags.length > 0 && flags.every((on) => !on);
+      input.checked = allOn;
+      input.indeterminate = !allOn && !allOff;
+      input.closest(".switch")?.classList.toggle("is-mixed", input.indeterminate);
+    });
+
+    $$("[data-admin-pack]").forEach((input) => {
+      input.addEventListener("change", () => {
+        visibility.packs[input.getAttribute("data-admin-pack")] = input.checked;
+        saveVisibility();
+        render();
+      });
+    });
+    $$("[data-admin-module]").forEach((input) => {
+      input.addEventListener("change", () => {
+        visibility.modules[input.getAttribute("data-admin-module")] = input.checked;
+        saveVisibility();
+        render();
+      });
+    });
+    $$("[data-admin-group]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const on = input.checked;
+        (input.getAttribute("data-admin-modules") || "")
+          .split(",")
+          .filter(Boolean)
+          .forEach((id) => {
+            visibility.modules[id] = on;
+          });
+        saveVisibility();
+        render();
+      });
+    });
+    $("#admin-lock")?.addEventListener("click", () => {
+      try {
+        sessionStorage.removeItem(ADMIN_UNLOCK_KEY);
+      } catch {
+        /* ignore */
+      }
+      render();
+    });
+    $("#admin-reset-visibility")?.addEventListener("click", () => {
+      if (!confirm("Reset module visibility to the starting setup on this device?")) return;
+      visibility = { packs: {}, modules: {} };
+      try {
+        localStorage.removeItem(VISIBILITY_KEY);
+      } catch {
+        /* ignore */
+      }
+      render();
+      showToast("Module setup reset");
+    });
+  }
+
   /* ---------- Routing ---------- */
   function detectPackId(raw) {
-    if (!raw || raw === "home") return null;
-    if (raw === "cfc-red" || raw === "cfc-glossary" || raw.startsWith("cfc-")) return "cfcRed";
-    if (PACKS.cfcRed) {
-      const cfc = PACKS.cfcRed;
-      if (
-        (cfc.MODULES || []).some((m) => m.hash === raw || m.id === raw) ||
-        (cfc.SCENARIOS || []).some((s) => s.id === raw || s.chapter === raw)
-      ) {
-        return "cfcRed";
-      }
+    if (!raw || raw === "home" || raw === "admin") return null;
+    const order = ["cfcFutsal", "cfcRed", "blueprint"];
+    for (let i = 0; i < order.length; i += 1) {
+      const id = order[i];
+      const meta = PACK_META[id];
+      const pack = PACKS[id];
+      if (!meta || !pack) continue;
+      if (raw === meta.hash || raw === meta.glossary || raw === meta.challenge) return id;
+      if ((pack.MODULES || []).some((m) => m.hash === raw || m.id === raw)) return id;
+      if ((pack.SCENARIOS || []).some((s) => s.id === raw || s.chapter === raw)) return id;
     }
+    if (raw.indexOf("futsal-") === 0) return PACKS.cfcFutsal ? "cfcFutsal" : null;
+    if (raw === "cfc-red" || raw.indexOf("cfc-") === 0) return PACKS.cfcRed ? "cfcRed" : null;
     return "blueprint";
   }
 
   function parseHash() {
     const raw = (location.hash || "#home").replace(/^#/, "");
+    if (raw === "admin") return { view: "admin" };
     const nextPack = detectPackId(raw);
     if (nextPack) bindPack(nextPack);
 
     if (!raw || raw === "home") return { view: "home" };
-    if (raw === "blueprint") return { view: "blueprint" };
-    if (raw === "cfc-red") return { view: "cfc-red" };
-    if (raw === "glossary" || raw === "cfc-glossary") return { view: "glossary" };
-    if (raw === "challenge" || raw === "cfc-challenge") return { view: "challenge" };
+    const homePack = Object.keys(PACK_META).find((id) => PACK_META[id].hash === raw);
+    if (homePack) return { view: PACK_META[homePack].hash };
+    const glossOrChallenge = Object.keys(PACK_META).find(
+      (id) => PACK_META[id].glossary === raw || PACK_META[id].challenge === raw
+    );
+    if (glossOrChallenge && PACK_META[glossOrChallenge].glossary === raw) return { view: "glossary" };
+    if (glossOrChallenge && PACK_META[glossOrChallenge].challenge === raw) return { view: "challenge" };
 
     const mod = MODULES.find((m) => m.hash === raw || m.id === raw);
     if (mod) {
@@ -247,36 +623,65 @@
   }
 
   function isBlueprintArea(view) {
-    return view !== "home" && packId === "blueprint";
+    return view !== "home" && view !== "admin" && packId === "blueprint";
   }
 
   function isCfcRedArea(view) {
-    return view !== "home" && packId === "cfcRed";
+    return view !== "home" && view !== "admin" && packId === "cfcRed";
+  }
+
+  function isFutsalArea(view) {
+    return view !== "home" && view !== "admin" && packId === "cfcFutsal";
+  }
+
+  function applyPackColors(futsal) {
+    const rootStyle = document.documentElement.style;
+    const keys = ["--ours", "--ours-stroke", "--opp", "--opp-stroke", "--brand", "--brand-strong"];
+    keys.forEach((key) => rootStyle.removeProperty(key));
+    if (!futsal || !CONFIG || !CONFIG.colors) return;
+    const c = CONFIG.colors;
+    if (c.ours) rootStyle.setProperty("--ours", c.ours);
+    if (c.oursStroke) rootStyle.setProperty("--ours-stroke", c.oursStroke);
+    if (c.opp) rootStyle.setProperty("--opp", c.opp);
+    if (c.oppStroke) rootStyle.setProperty("--opp-stroke", c.oppStroke);
+    if (c.ours) rootStyle.setProperty("--brand", c.ours);
+    if (c.oursStroke) rootStyle.setProperty("--brand-strong", c.oursStroke);
   }
 
   function updateChrome(view, moduleId) {
     const blueprintArea = isBlueprintArea(view);
     const cfcArea = isCfcRedArea(view);
-    document.body.classList.toggle("blueprint-view", blueprintArea || cfcArea);
+    const futsalArea = isFutsalArea(view);
+    document.body.classList.toggle("admin-view", view === "admin");
+    document.body.classList.toggle("blueprint-view", blueprintArea || cfcArea || futsalArea);
     document.body.classList.toggle("hub-view", view === "home");
+    document.body.classList.toggle("futsal-mode", futsalArea);
+    applyPackColors(futsalArea);
 
     const brandSub = $("#brand-sub");
     if (brandSub) {
-      if (view === "home") brandSub.textContent = "BHS Blueprint · CFC Red";
+      if (view === "admin") brandSub.textContent = "Admin";
+      else if (view === "home") {
+        const labels = enabledPackList().map((id) => PACK_META[id].shortLabel || PACK_META[id].label);
+        brandSub.textContent = labels.join(" · ") || "Modules off";
+      } else if (futsalArea) brandSub.textContent = "CFC Red Futsal";
       else if (cfcArea) brandSub.textContent = "CFC Red";
       else brandSub.textContent = "BHS Blueprint";
     }
 
     const blueprintNav = $(".nav-blueprint");
     const cfcNav = $(".nav-cfc-red");
+    const futsalNav = $(".nav-futsal");
     if (blueprintNav) blueprintNav.hidden = !blueprintArea;
     if (cfcNav) cfcNav.hidden = !cfcArea;
+    if (futsalNav) futsalNav.hidden = !futsalArea;
 
     $$("[data-area]").forEach((el) => {
       const area = el.getAttribute("data-area");
       const on =
         (area === "blueprint" && blueprintArea) ||
-        (area === "cfc-red" && cfcArea);
+        (area === "cfc-red" && cfcArea) ||
+        (area === "cfc-futsal" && futsalArea);
       if (on) el.setAttribute("aria-current", "page");
       else el.removeAttribute("aria-current");
       if (view === "home") el.removeAttribute("aria-current");
@@ -284,30 +689,30 @@
 
     document.body.classList.toggle("blueprint-mode", blueprintArea || view === "home");
     document.body.classList.toggle("cfc-red-mode", cfcArea);
-    if (view === "home") {
-      document.body.classList.remove("blueprint-mode", "cfc-red-mode");
-      document.body.classList.add("hub-mode");
+    document.body.classList.toggle("futsal-mode", futsalArea);
+    if (view === "home" || view === "admin") {
+      document.body.classList.remove("blueprint-mode", "cfc-red-mode", "futsal-mode");
+      document.body.classList.toggle("hub-mode", view === "home");
     } else {
       document.body.classList.remove("hub-mode");
     }
 
     setNavCurrent(view, moduleId);
+    applyVisibility();
   }
 
   function setNavCurrent(view, moduleId) {
     const mod = moduleId ? findModule(moduleId) : null;
+    const meta = PACK_META[packId] || PACK_META.blueprint;
     const groupId = mod?.group || null;
-    const glossaryKey = packId === "cfcRed" ? "cfc-glossary" : "glossary";
-    const challengeKey = packId === "cfcRed" ? "cfc-challenge" : "challenge";
 
     $$("[data-nav]").forEach((el) => {
       const key = el.getAttribute("data-nav");
       const current =
         (view === "home" && key === "hub") ||
-        (view === "blueprint" && (key === "blueprint" || key === "blueprint-area")) ||
-        (view === "cfc-red" && (key === "cfc-red" || key === "cfc-red-area")) ||
-        (view === "glossary" && key === glossaryKey) ||
-        (view === "challenge" && key === challengeKey) ||
+        (view === meta.hash && (key === meta.hash || key === meta.hash + "-area")) ||
+        (view === "glossary" && key === meta.glossary) ||
+        (view === "challenge" && key === meta.challenge) ||
         (view === "module" && key === moduleId) ||
         (view === "scenario" && key === moduleId);
       if (current) el.setAttribute("aria-current", "page");
@@ -321,16 +726,90 @@
     });
   }
 
+  function pitchFrame(scenario) {
+    const futsal = CONFIG && CONFIG.pitch && CONFIG.pitch.kind === "futsal";
+    if (scenario.pitchView) {
+      return {
+        futsal,
+        view: scenario.pitchView,
+        w: PW,
+        h: PL,
+      };
+    }
+    if (futsal) {
+      return {
+        futsal: true,
+        view: { x: -1.1, y: -1.35, w: PW + 2.2, h: PL + 2.7 },
+        w: PW,
+        h: PL,
+      };
+    }
+    return { futsal: false, view: { x: 0, y: 0, w: PW, h: PL }, w: PW, h: PL };
+  }
+
+  function futsalMarkings(w, h, line, sw) {
+    const goalW = 3;
+    const goalD = 0.7;
+    const goalX = (w - goalW) / 2;
+    const cx = w / 2;
+    const arc = (y0, yFront, sweep) => {
+      const leftOut = 8.5 - 6;
+      const rightOut = 11.5 + 6;
+      return `<path d="M ${leftOut} ${y0} A 6 6 0 0 ${sweep} 8.42 ${yFront} L 11.58 ${yFront} A 6 6 0 0 ${sweep} ${rightOut} ${y0}" fill="none" stroke="${line}" stroke-width="${sw}" />`;
+    };
+    return `
+      <rect x="0.35" y="0.35" width="${w - 0.7}" height="${h - 0.7}" fill="none" stroke="${line}" stroke-width="${sw}" />
+      <line x1="0.35" y1="${h / 2}" x2="${w - 0.35}" y2="${h / 2}" stroke="${line}" stroke-width="${sw * 0.85}" stroke-dasharray="0.55 0.4" />
+      <circle cx="${cx}" cy="${h / 2}" r="3" fill="none" stroke="${line}" stroke-width="${sw * 0.85}" />
+      <circle cx="${cx}" cy="${h / 2}" r="0.12" fill="${line}" />
+      <rect x="${goalX}" y="${-goalD}" width="${goalW}" height="${goalD}" fill="none" stroke="${line}" stroke-width="${sw}" />
+      <rect x="${goalX}" y="${h}" width="${goalW}" height="${goalD}" fill="none" stroke="${line}" stroke-width="${sw}" />
+      ${arc(0, 6, 0)}
+      ${arc(h, h - 6, 1)}
+      <circle cx="${cx}" cy="6" r="0.12" fill="${line}" />
+      <circle cx="${cx}" cy="10" r="0.1" fill="${line}" />
+      <circle cx="${cx}" cy="${h - 6}" r="0.12" fill="${line}" />
+      <circle cx="${cx}" cy="${h - 10}" r="0.1" fill="${line}" />
+    `;
+  }
+
+  function outdoorMarkings(line) {
+    const goalW = 7.32;
+    const goalX = (PW - goalW) / 2;
+    return `
+      <rect x="1" y="1" width="${PW - 2}" height="${PL - 2}" fill="none" stroke="${line}" stroke-width="0.45" />
+      <line x1="1" y1="${PL / 2}" x2="${PW - 1}" y2="${PL / 2}" stroke="${line}" stroke-width="0.35" />
+      <circle cx="${PW / 2}" cy="${PL / 2}" r="9.15" fill="none" stroke="${line}" stroke-width="0.35" />
+      <circle cx="${PW / 2}" cy="${PL / 2}" r="0.5" fill="${line}" />
+      <rect x="${goalX}" y="0.15" width="${goalW}" height="0.85" fill="none" stroke="${line}" stroke-width="0.4" />
+      <rect x="${goalX}" y="${PL - 1}" width="${goalW}" height="0.85" fill="none" stroke="${line}" stroke-width="0.4" />
+      <rect x="${(PW - 40.32) / 2}" y="1" width="40.32" height="16.5" fill="none" stroke="${line}" stroke-width="0.35" />
+      <rect x="${(PW - 18.32) / 2}" y="1" width="18.32" height="5.5" fill="none" stroke="${line}" stroke-width="0.35" />
+      <rect x="${(PW - 40.32) / 2}" y="${PL - 17.5}" width="40.32" height="16.5" fill="none" stroke="${line}" stroke-width="0.35" />
+      <rect x="${(PW - 18.32) / 2}" y="${PL - 6.5}" width="18.32" height="5.5" fill="none" stroke="${line}" stroke-width="0.35" />
+    `;
+  }
+
   /* ---------- Pitch SVG ---------- */
   function pitchMarkup(scenario, opts = {}) {
     const hideLabels = opts.hideLabels || false;
     const showCoachTargets = state.coach;
-    const view = scenario.pitchView || { x: 0, y: 0, w: PW, h: PL };
+    const frame = pitchFrame(scenario);
+    const view = frame.view;
+    drawScale = frame.futsal ? PW / 68 : 1;
     const stripes = [];
-    for (let i = 0; i < 6; i += 1) {
-      stripes.push(
-        `<rect class="grass-stripe" x="0" y="${i * (PL / 6)}" width="${PW}" height="${PL / 12}" />`
-      );
+    if (frame.futsal) {
+      for (let i = 0; i < 8; i += 1) {
+        stripes.push(
+          `<rect class="grass-stripe" x="${i * (PW / 8)}" y="0" width="${PW / 16}" height="${PL}" />`
+        );
+      }
+    } else {
+      for (let i = 0; i < 6; i += 1) {
+        stripes.push(
+          `<rect class="grass-stripe" x="0" y="${i * (PL / 6)}" width="${PW}" height="${PL / 12}" />`
+        );
+      }
     }
 
     const zones = (scenario.zones || [])
@@ -340,7 +819,8 @@
         const attrs = interactive
           ? `tabindex="0" role="button" aria-label="${escapeHtml(z.label || z.id)}"`
           : `pointer-events="none" aria-hidden="true"`;
-        return `<rect class="${cls}" data-zone-id="${escapeHtml(z.id)}" x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="1.2" ${attrs} />`;
+        const rx = frame.futsal ? 0.35 : 1.2;
+        return `<rect class="${cls}" data-zone-id="${escapeHtml(z.id)}" x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="${rx}" ${attrs} />`;
       })
       .join("");
 
@@ -348,11 +828,12 @@
     if (showCoachTargets) {
       if (scenario.dragTarget) {
         const t = scenario.dragTarget;
-        coachTargets += `<circle class="coach-target coach-only" cx="${t.x}" cy="${t.y}" r="${t.r || 6}" />`;
+        coachTargets += `<circle class="coach-target coach-only" cx="${t.x}" cy="${t.y}" r="${t.r || (frame.futsal ? 1.6 : 6)}" />`;
       }
       (scenario.zones || []).forEach((z) => {
         if (z.id === scenario.correctAnswer) {
-          coachTargets += `<rect class="coach-target coach-only" x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="1.2" />`;
+          const rx = frame.futsal ? 0.35 : 1.2;
+          coachTargets += `<rect class="coach-target coach-only" x="${z.x}" y="${z.y}" width="${z.w}" height="${z.h}" rx="${rx}" />`;
         }
       });
     }
@@ -363,31 +844,21 @@
       .join("");
 
     const ball = scenario.ball ? ballMarkup(scenario.ball.x, scenario.ball.y) : "";
-
     const line = "var(--pitch-line)";
-    const goalW = 7.32;
-    const goalX = (PW - goalW) / 2;
+    const marker = frame.futsal ? 1.15 : 4;
+    const markings = frame.futsal
+      ? futsalMarkings(frame.w, frame.h, line, 0.12)
+      : outdoorMarkings(line);
 
     return `
-      <svg class="pitch-svg" viewBox="${view.x} ${view.y} ${view.w} ${view.h}" role="img" aria-label="Tactical pitch diagram">
+      <svg class="pitch-svg${frame.futsal ? " is-futsal" : ""}" viewBox="${view.x} ${view.y} ${view.w} ${view.h}" role="img" aria-label="${frame.futsal ? "Futsal court diagram" : "Tactical pitch diagram"}">
         <defs>
-          <marker id="arrowhead" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto">
-            <path d="M0,0 L4,2 L0,4 Z" fill="var(--brand)" />
+          <marker id="arrowhead" markerWidth="${marker}" markerHeight="${marker}" refX="${marker * 0.75}" refY="${marker / 2}" orient="auto">
+            <path d="M0,0 L${marker},${marker / 2} L0,${marker} Z" fill="var(--brand)" />
           </marker>
         </defs>
         ${stripes.join("")}
-        <rect x="1" y="1" width="${PW - 2}" height="${PL - 2}" fill="none" stroke="${line}" stroke-width="0.45" />
-        <line x1="1" y1="${PL / 2}" x2="${PW - 1}" y2="${PL / 2}" stroke="${line}" stroke-width="0.35" />
-        <circle cx="${PW / 2}" cy="${PL / 2}" r="9.15" fill="none" stroke="${line}" stroke-width="0.35" />
-        <circle cx="${PW / 2}" cy="${PL / 2}" r="0.5" fill="${line}" />
-        <!-- goals -->
-        <rect x="${goalX}" y="0.15" width="${goalW}" height="0.85" fill="none" stroke="${line}" stroke-width="0.4" />
-        <rect x="${goalX}" y="${PL - 1}" width="${goalW}" height="0.85" fill="none" stroke="${line}" stroke-width="0.4" />
-        <!-- penalty areas -->
-        <rect x="${(PW - 40.32) / 2}" y="1" width="40.32" height="16.5" fill="none" stroke="${line}" stroke-width="0.35" />
-        <rect x="${(PW - 18.32) / 2}" y="1" width="18.32" height="5.5" fill="none" stroke="${line}" stroke-width="0.35" />
-        <rect x="${(PW - 40.32) / 2}" y="${PL - 17.5}" width="40.32" height="16.5" fill="none" stroke="${line}" stroke-width="0.35" />
-        <rect x="${(PW - 18.32) / 2}" y="${PL - 6.5}" width="18.32" height="5.5" fill="none" stroke="${line}" stroke-width="0.35" />
+        ${markings}
         <g id="pitch-zones">${zones}</g>
         <g id="pitch-coach">${coachTargets}</g>
         <g id="pitch-anim"></g>
@@ -397,9 +868,16 @@
     `;
   }
 
+  function placedTransform(x, y, scale) {
+    const s = scale == null ? drawScale : scale;
+    if (!s || s === 1) return `translate(${x},${y})`;
+    return `translate(${x},${y}) scale(${s})`;
+  }
+
   function ballMarkup(x, y) {
+    const scaleAttr = drawScale === 1 ? "" : ` data-scale="${drawScale}"`;
     return `
-      <g class="ball" id="pitch-ball" data-x="${x}" data-y="${y}" transform="translate(${x},${y})">
+      <g class="ball" id="pitch-ball" data-x="${x}" data-y="${y}"${scaleAttr} transform="${placedTransform(x, y)}">
         <text class="ball-emoji" text-anchor="middle" dominant-baseline="central">⚽</text>
       </g>
     `;
@@ -407,7 +885,8 @@
 
   function setBallPos(el, x, y) {
     if (!el) return;
-    el.setAttribute("transform", `translate(${x},${y})`);
+    const scale = parseFloat(el.dataset.scale || "1");
+    el.setAttribute("transform", placedTransform(x, y, scale));
     el.dataset.x = x;
     el.dataset.y = y;
   }
@@ -431,12 +910,17 @@
     const shape = isOpp
       ? `<polygon class="token-disk" points="0,1.55 -1.45,-1.15 1.45,-1.15" />` // ▼
       : `<polygon class="token-disk" points="0,-1.55 -1.45,1.15 1.45,1.15" />`; // ▲
+    const keeperRing = String(p.number) === "GK"
+      ? `<circle class="token-keeper-ring" cx="0" cy="0" r="1.95" fill="none" />`
+      : "";
     const numY = isOpp ? "-0.15" : "0.45";
     const fullRole = roleFullName(p);
     const numStr = String(p.number);
-    const numClass = numStr.length > 2 ? "token-num token-num-sm" : "token-num";
+    const numClass = numStr.length > 2 || numStr === "GK" ? "token-num token-num-sm" : "token-num";
+    const scaleAttr = drawScale === 1 ? "" : ` data-scale="${drawScale}"`;
     return `
-      <g class="${cls}" data-player-id="${escapeHtml(p.id)}" data-role="${escapeHtml(fullRole)}" data-number="${escapeHtml(numStr)}" data-x="${p.x}" data-y="${p.y}" transform="translate(${p.x},${p.y})">
+      <g class="${cls}" data-player-id="${escapeHtml(p.id)}" data-role="${escapeHtml(fullRole)}" data-number="${escapeHtml(numStr)}" data-x="${p.x}" data-y="${p.y}"${scaleAttr} transform="${placedTransform(p.x, p.y)}">
+        ${keeperRing}
         ${shape}
         <text class="${numClass}" x="0" y="${numY}">${escapeHtml(numStr)}</text>
         ${roleText}
@@ -445,7 +929,8 @@
   }
 
   function setTokenPos(g, x, y) {
-    g.setAttribute("transform", `translate(${x},${y})`);
+    const scale = parseFloat(g.dataset.scale || "1");
+    g.setAttribute("transform", placedTransform(x, y, scale));
     g.dataset.x = x;
     g.dataset.y = y;
   }
@@ -586,14 +1071,30 @@
   const root = $("#app-root");
 
   function render() {
+    animGeneration += 1;
     const route = parseHash();
+    if (route.view === "home") {
+      const enabled = enabledPackList();
+      if (enabled.length === 1) {
+        navigate(PACK_META[enabled[0]].hash);
+        return;
+      }
+    } else if (route.view !== "admin" && !routeAllowed(route)) {
+      const next = fallbackHash();
+      const current = (location.hash || "#home").replace(/^#/, "");
+      if (current !== next) {
+        navigate(next);
+        return;
+      }
+    }
     state.view = route.view;
     state.moduleId = route.moduleId || null;
     state.scenarioId = route.scenarioId || null;
     updateChrome(state.view, state.moduleId);
 
-    if (state.view === "home") renderHub();
-    else if (state.view === "blueprint" || state.view === "cfc-red") renderPackHome();
+    if (state.view === "admin") renderAdmin();
+    else if (state.view === "home") renderHub();
+    else if (Object.keys(PACK_META).some((id) => PACK_META[id].hash === state.view)) renderPackHome();
     else if (state.view === "glossary") renderGlossary();
     else if (state.view === "challenge") renderChallenge();
     else if (state.view === "module") renderModule(state.moduleId);
@@ -604,30 +1105,49 @@
   }
 
   function renderHub() {
+    const cards = [];
+    if (isPackEnabled("blueprint")) {
+      cards.push(`
+        <a class="hub-card" href="#blueprint">
+          <h2>BHS Blueprint</h2>
+          <p>11v11 tactical learning — 4-3-3, 2-3-5 attack, 4-4-2 defense, and set pieces.</p>
+          <span class="hub-card-cta">Open modules</span>
+        </a>`);
+    }
+    if (isPackEnabled("cfcRed")) {
+      cards.push(`
+        <a class="hub-card hub-card-cfc" href="#cfc-red">
+          <h2>CFC Red</h2>
+          <p>U12 boys 9v9 — 4-1-2-1 (6 distinct from 8/10), 2-3-3 attack, same corner language.</p>
+          <span class="hub-card-cta">Open modules</span>
+        </a>`);
+    }
+    if (isPackEnabled("cfcFutsal")) {
+      cards.push(`
+        <a class="hub-card hub-card-futsal" href="#cfc-futsal">
+          <h2>CFC Red Futsal</h2>
+          <p>U12 futsal — four jobs, Zone 14, and a compact diamond. Players rotate. The spaces stay filled.</p>
+          <span class="hub-card-cta">Open modules</span>
+        </a>`);
+    }
+    const empty = cards.length
+      ? ""
+      : `<p class="empty-state">No areas are turned on. Use the gear at the top right, then Manage modules.</p>`;
     root.innerHTML = `
       <section class="hero hub-hero">
         <h1>Brighton Girls</h1>
         <p>Tactical learning — pick a game model and work the modules.</p>
       </section>
-      <section class="hub-grid" aria-label="App areas">
-        <a class="hub-card" href="#blueprint">
-          <h2>BHS Blueprint</h2>
-          <p>11v11 tactical learning — 4-3-3, 2-3-5 attack, 4-4-2 defense, and set pieces.</p>
-          <span class="hub-card-cta">Open modules</span>
-        </a>
-        <a class="hub-card hub-card-cfc" href="#cfc-red">
-          <h2>CFC Red</h2>
-          <p>U12 boys 9v9 — 4-1-2-1 (6 distinct from 8/10), 2-3-3 attack, same corner language.</p>
-          <span class="hub-card-cta">Open modules</span>
-        </a>
-      </section>
+      ${empty}
+      <section class="hub-grid" aria-label="App areas">${cards.join("")}</section>
     `;
   }
 
   function renderPackHome() {
-    const challengeHash = packId === "cfcRed" ? "cfc-challenge" : "challenge";
+    const challengeHash = (PACK_META[packId] && PACK_META[packId].challenge) || "challenge";
     const challengeQs = CONFIG.challengeCount || 10;
-    const cards = MODULES.map((m) => {
+    const visible = MODULES.filter((m) => isModuleEnabled(m.id));
+    const cards = visible.map((m) => {
       if (m.isChallenge) {
         return `
           <article class="module-card challenge-card">
@@ -679,7 +1199,7 @@
       `;
     }).join("");
 
-    const overall = MODULES.filter((m) => !m.isChallenge).reduce(
+    const overall = visible.filter((m) => !m.isChallenge).reduce(
       (acc, m) => {
         const s = moduleStats(m.id);
         acc.done += s.completed;
@@ -690,9 +1210,11 @@
     );
 
     const blurb =
-      packId === "cfcRed"
-        ? "See it, choose it, explain it. Train the 4-1-2-1 game model — 2-3-3 in attack, and corners."
-        : "See it, choose it, explain it. Train attacking shape, wide patterns, supporting runs, defensive shape, and set pieces.";
+      packId === "cfcFutsal"
+        ? "See it, choose it, explain it. Four jobs, Zone 14, and a diamond that can flex. Freedom to rotate. Obligation to rebalance."
+        : packId === "cfcRed"
+          ? "See it, choose it, explain it. Train the 4-1-2-1 game model — 2-3-3 in attack, and corners."
+          : "See it, choose it, explain it. Train attacking shape, wide patterns, supporting runs, defensive shape, and set pieces.";
 
     root.innerHTML = `
       <section class="hero">
@@ -703,16 +1225,16 @@
           <span class="pill">Saved on this device</span>
         </div>
       </section>
-      <section class="module-grid" aria-label="Modules">${cards}</section>
+      <section class="module-grid" aria-label="Modules">${cards || `<p class="empty-state">Every module in this area is off. Use the gear at the top right, then Manage modules.</p>`}</section>
     `;
   }
 
   function packHomeHash() {
-    return packId === "cfcRed" ? "cfc-red" : "blueprint";
+    return (PACK_META[packId] && PACK_META[packId].hash) || "blueprint";
   }
 
   function packHomeLabel() {
-    return CONFIG.appName || (packId === "cfcRed" ? "CFC Red" : "BHS Blueprint");
+    return CONFIG.appName || (PACK_META[packId] && PACK_META[packId].label) || "Blueprint";
   }
 
   function renderGlossary() {
@@ -726,9 +1248,11 @@
       </div>`
     ).join("");
     const intro =
-      packId === "cfcRed"
-        ? "Shared language for CFC Red’s 9v9 model. Short definitions — not essays."
-        : "Shared language for Brighton’s model. Short definitions — not essays.";
+      packId === "cfcFutsal"
+        ? "Words for CFC Red Futsal. Jobs are spaces. The player in the space can change."
+        : packId === "cfcRed"
+          ? "Shared language for CFC Red’s 9v9 model. Short definitions — not essays."
+          : "Shared language for Brighton’s model. Short definitions — not essays.";
     root.innerHTML = `
       <div class="section-header">
         <div>
@@ -744,7 +1268,7 @@
   function renderModule(moduleId) {
     const mod = findModule(moduleId);
     if (!mod || mod.isChallenge) {
-      navigate("blueprint");
+      navigate(fallbackHash());
       return;
     }
     const stats = moduleStats(moduleId);
@@ -768,7 +1292,7 @@
         } else if (p.attempts > 0) {
           status = "In progress";
         }
-        const chapterLabel = ({
+        const chapterLabel = s.chapterTitle || ({
           "basics-numbers": "Numbers & codes",
           "basics-shapes": "Shape shifts",
           "attack-the-moment": "Attack the moment",
@@ -900,7 +1424,7 @@
   function renderScenario(id) {
     const scenario = findScenario(id);
     if (!scenario) {
-      navigate("blueprint");
+      navigate(fallbackHash());
       return;
     }
     const challengeMode = !!(state.challenge && state.challenge.active);
@@ -950,7 +1474,7 @@
           <label class="muted">Module filter
             <select id="coach-module-filter">
               <option value="">All</option>
-              ${MODULES.filter((m) => !m.isChallenge).map((m) => `<option value="${m.id}" ${m.id === s.module ? "selected" : ""}>${escapeHtml(m.title)}</option>`).join("")}
+              ${MODULES.filter((m) => !m.isChallenge && isModuleEnabled(m.id)).map((m) => `<option value="${m.id}" ${m.id === s.module ? "selected" : ""}>${escapeHtml(m.title)}</option>`).join("")}
             </select>
           </label>
           <button type="button" class="btn btn-secondary" id="coach-prev">Previous</button>
@@ -1784,7 +2308,9 @@
 
   /* ---------- Animation ---------- */
   function playAnimation(steps) {
-    if (!steps.length) return;
+    const generation = ++animGeneration;
+    const alive = () => generation === animGeneration;
+    if (!steps || !steps.length) return;
     const scenario = state.session?.scenario;
     if (scenario) resetPitchToScenario(scenario);
     const animLayer = $("#pitch-anim");
@@ -1798,15 +2324,16 @@
     }
 
     const setCaption = (step) => {
-      if (!captionEl || !step.caption) return;
+      if (!alive() || !captionEl || !step.caption) return;
       captionEl.textContent = step.caption;
     };
 
     const flatten = (list) => {
       list.forEach((step) => {
+        if (!alive()) return;
         setCaption(step);
-        if (step.type === "parallel") (step.steps || []).forEach((s) => applyAnimStep(s, true));
-        else applyAnimStep(step, true);
+        if (step.type === "parallel") (step.steps || []).forEach((s) => applyAnimStep(s, true, alive));
+        else applyAnimStep(step, true, alive);
       });
     };
 
@@ -1817,27 +2344,24 @@
 
     let i = 0;
     const run = () => {
-      if (i >= steps.length) return;
+      if (!alive() || i >= steps.length) return;
       const step = steps[i];
       setCaption(step);
-      if (step.type === "parallel") {
-        (step.steps || []).forEach((s) => applyAnimStep(s, false));
-        i += 1;
-        setTimeout(run, step.duration || 500);
-        return;
-      }
-      applyAnimStep(step, false);
-      const dur = step.duration || 500;
+      const dur = step.duration || (step.type === "parallel" ? 700 : 500);
+      if (step.type === "parallel") (step.steps || []).forEach((s) => applyAnimStep(s, false, alive));
+      else applyAnimStep(step, false, alive);
       i += 1;
       setTimeout(run, dur);
     };
     run();
   }
 
-  function applyAnimStep(step, instant) {
+  function applyAnimStep(step, instant, alive) {
+    const stillGoing = alive || (() => true);
     const animLayer = $("#pitch-anim");
+    if (!animLayer) return;
     if (step.type === "parallel") {
-      (step.steps || []).forEach((s) => applyAnimStep(s, instant));
+      (step.steps || []).forEach((s) => applyAnimStep(s, instant, stillGoing));
       return;
     }
     if (step.type === "move") {
@@ -1861,6 +2385,7 @@
       const start = performance.now();
       const dur = step.duration || 500;
       const tick = (now) => {
+        if (!stillGoing()) return;
         const t = Math.min(1, (now - start) / dur);
         setTokenPos(g, from.x + (toX - from.x) * t, from.y + (toY - from.y) * t);
         if (t < 1) requestAnimationFrame(tick);
@@ -1886,6 +2411,7 @@
           const x0 = from.x;
           const y0 = from.y;
           const tick = (now) => {
+            if (!stillGoing()) return;
             const t = Math.min(1, (now - start) / dur);
             setBallPos(ball, x0 + (to.x - x0) * t, y0 + (to.y - y0) * t);
             if (t < 1) requestAnimationFrame(tick);
@@ -1909,14 +2435,14 @@
     });
     $("#coach-module-filter")?.addEventListener("change", (e) => {
       const mid = e.target.value;
-      const list = mid ? moduleScenarios(mid) : SCENARIOS;
+      const list = mid ? moduleScenarios(mid) : SCENARIOS.filter((s) => isModuleEnabled(s.module));
       if (list[0]) navigate(list[0].id);
     });
   }
 
   function coachNav(dir) {
     const filter = $("#coach-module-filter")?.value || "";
-    const list = filter ? moduleScenarios(filter) : SCENARIOS;
+    const list = filter ? moduleScenarios(filter) : SCENARIOS.filter((s) => isModuleEnabled(s.module));
     const idx = list.findIndex((s) => s.id === state.session.scenario.id);
     const next = list[idx + dir];
     if (next) {
@@ -1960,10 +2486,14 @@
   }
 
   function startChallenge() {
-    const pool = SCENARIOS.filter((s) => s.challengeEligible !== false);
+    const pool = SCENARIOS.filter((s) => s.challengeEligible !== false && isModuleEnabled(s.module));
     const queue = shuffle(pool)
       .slice(0, CONFIG.challengeCount || 10)
       .map((s) => s.id);
+    if (!queue.length) {
+      showToast("No challenge questions in the modules that are on");
+      return;
+    }
     state.challenge = {
       active: true,
       finished: false,
@@ -2017,6 +2547,14 @@
       wide: "Wide attack patterns",
       support: "Supporting runs",
       corner: "Corners",
+      "futsal-jobs": "The four jobs",
+      "futsal-zone14": "Zone 14",
+      "futsal-rotation": "Rotation and rebalance",
+      "futsal-keeper": "Keeper in buildup",
+      "futsal-finish": "Finish the advantage",
+      "futsal-diamond": "Compact diamond",
+      "futsal-motion": "Diamond in motion",
+      "futsal-transition": "Transitions",
     };
 
     const rows = Object.keys(byConcept)
@@ -2051,9 +2589,17 @@
       "corners-short": "corner",
       "corners-long": "corner",
       corner: "corner",
+      "futsal-jobs": "futsal-jobs",
+      "futsal-zone14": "futsal-zone14",
+      "futsal-rotation": "futsal-rotation",
+      "futsal-keeper": "futsal-keeper",
+      "futsal-finish": "futsal-finish",
+      "futsal-diamond": "futsal-diamond",
+      "futsal-motion": "futsal-motion",
+      "futsal-transition": "futsal-transitions",
     };
-    const reviewId = modMap[weakest] || "attack";
-    const reviewMod = findModule(reviewId);
+    const reviewId = modMap[weakest] || (MODULES.find((m) => !m.isChallenge) || {}).id;
+    const reviewMod = findModule(reviewId) || MODULES.find((m) => !m.isChallenge);
 
     const totalHit = results.filter((r) => r.decisionCorrect && r.rationaleCorrect).length;
 
@@ -2134,6 +2680,15 @@
   const settingsModal = $("#settings-modal");
   $("#settings-btn")?.addEventListener("click", () => {
     settingsModal.hidden = false;
+  });
+  $("#open-admin-btn")?.addEventListener("click", () => {
+    settingsModal.hidden = true;
+    if ((location.hash || "").replace(/^#/, "") === "admin") render();
+    else navigate("admin");
+  });
+  $("#area-switch-select")?.addEventListener("change", (e) => {
+    const hash = e.target.value;
+    if (hash) navigate(hash);
   });
   $$("[data-close-settings]").forEach((el) =>
     el.addEventListener("click", () => {
