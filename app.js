@@ -659,15 +659,16 @@
     applyPackColors(futsalArea);
 
     const brandSub = $("#brand-sub");
-    if (brandSub) {
-      if (view === "admin") brandSub.textContent = "Admin";
-      else if (view === "home") {
-        const labels = enabledPackList().map((id) => PACK_META[id].shortLabel || PACK_META[id].label);
-        brandSub.textContent = labels.join(" · ") || "Modules off";
-      } else if (futsalArea) brandSub.textContent = "CFC Red Futsal";
-      else if (cfcArea) brandSub.textContent = "CFC Red";
-      else brandSub.textContent = "BHS Blueprint";
-    }
+    let sub = "";
+    if (view === "admin") sub = "Admin";
+    else if (view === "home") {
+      const labels = enabledPackList().map((id) => PACK_META[id].shortLabel || PACK_META[id].label);
+      sub = labels.join(" · ") || "Modules off";
+    } else if (futsalArea) sub = "CFC Red Futsal";
+    else if (cfcArea) sub = "CFC Red";
+    else sub = "BHS Blueprint";
+    if (brandSub) brandSub.textContent = sub;
+    applyBrand(view, sub);
 
     const blueprintNav = $(".nav-blueprint");
     const cfcNav = $(".nav-cfc-red");
@@ -699,6 +700,55 @@
 
     setNavCurrent(view, moduleId);
     applyVisibility();
+  }
+
+  function brandKeyFor(view) {
+    const inCfc = packId === "cfcRed" || packId === "cfcFutsal";
+    if (view !== "home" && view !== "admin") return inCfc ? "cfc" : "bhs";
+    if (view === "admin" && inCfc) return "cfc";
+    if (view === "admin" && packId === "blueprint" && isPackEnabled("blueprint")) return "bhs";
+    const enabled = enabledPackList();
+    const hasBhs = enabled.indexOf("blueprint") !== -1;
+    const hasCfc = enabled.indexOf("cfcRed") !== -1 || enabled.indexOf("cfcFutsal") !== -1;
+    if (hasCfc && !hasBhs) return "cfc";
+    if (hasBhs && !hasCfc) return "bhs";
+    return "mixed";
+  }
+
+  function applyBrand(view, sub) {
+    const key = brandKeyFor(view);
+    const logo = $("#brand-logo");
+    const name = $("#brand-name");
+    const icon = document.querySelector('link[rel="icon"]');
+    document.body.classList.toggle("brand-cfc", key === "cfc");
+    document.body.classList.toggle("brand-bhs", key === "bhs");
+    document.body.classList.toggle("brand-mixed", key === "mixed");
+    if (key === "cfc") {
+      if (name) name.textContent = "CFC";
+      if (logo) {
+        logo.hidden = false;
+        logo.src = "assets/cfc-logo.svg";
+        logo.alt = "CFC";
+      }
+      if (icon) icon.href = "assets/cfc-logo.svg";
+      document.title = sub ? "CFC — " + sub : "CFC";
+      return;
+    }
+    if (key === "bhs") {
+      if (name) name.textContent = "Brighton Girls";
+      if (logo) {
+        logo.hidden = false;
+        logo.src = "assets/logo.svg";
+        logo.alt = "Brighton Girls";
+      }
+      if (icon) icon.href = "assets/logo.svg";
+      document.title = sub ? "Brighton Girls — " + sub : "Brighton Girls";
+      return;
+    }
+    if (name) name.textContent = "";
+    if (logo) logo.hidden = true;
+    if (icon) icon.href = "assets/logo.svg";
+    document.title = sub || "Tactical learning";
   }
 
   function setNavCurrent(view, moduleId) {
@@ -1133,10 +1183,12 @@
     const empty = cards.length
       ? ""
       : `<p class="empty-state">No areas are turned on. Use the gear at the top right, then Manage modules.</p>`;
+    const hubBrand = brandKeyFor("home");
+    const hubTitle = hubBrand === "cfc" ? "CFC" : hubBrand === "bhs" ? "Brighton Girls" : "Tactical learning";
     root.innerHTML = `
       <section class="hero hub-hero">
-        <h1>Brighton Girls</h1>
-        <p>Tactical learning — pick a game model and work the modules.</p>
+        <h1>${escapeHtml(hubTitle)}</h1>
+        <p>${hubBrand === "mixed" ? "Pick a game model and work the modules." : "Tactical learning — pick a game model and work the modules."}</p>
       </section>
       ${empty}
       <section class="hub-grid" aria-label="App areas">${cards.join("")}</section>

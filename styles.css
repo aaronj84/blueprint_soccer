@@ -1078,12 +1078,15 @@ body.coach-mode .coach-banner {
     padding: 0.45rem 0.55rem;
   }
 
-  .brand-name {
+  body:not(.brand-cfc) .brand-name {
     display: none;
   }
 
+  body.brand-cfc .brand {
+    gap: 0.45rem;
+  }
 
-  .brand {
+  body.brand-mixed .brand {
     gap: 0;
   }
 
